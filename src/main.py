@@ -1,5 +1,6 @@
 import discord
 from discord.ext.commands import Bot, Context, is_owner
+from discord import ui
 import zoneinfo
 import aiosqlite
 import os
@@ -31,7 +32,8 @@ class MyBot(Bot):
         await self.db.execute("""
             CREATE TABLE IF NOT EXISTS guildchannel (
                 gid INTEGER UNIQUE,
-                cid INTEGER
+                cid INTEGER,
+                message TEXT
             );
         """)
 
@@ -58,7 +60,7 @@ async def test(interaction: Context):
     if not bot.db:
         return
 
-    cursor = await bot.db.execute("SELECT * FROM birthday")
+    cursor = await bot.db.execute("SELECT * FROM guildchannel")
     await interaction.send(str(await cursor.fetchall()))
 
 
@@ -103,6 +105,69 @@ async def registerme(
     await bot.db.commit()
 
     await interaction.response.send_message("Birthday registered!", ephemeral=True)
+
+
+class Configure(ui.Modal, title="Configure"):
+    channel = ui.Label(
+        text="Channel to send birthday announcements",
+        component=ui.TextInput(required=True),
+    )
+    message = ui.Label(
+        text=r"The birthday announcement itself!",
+        component=ui.TextInput(required=True, placeholder="Today is ${0}!'s birthday!"),
+    )
+
+    async def on_submit(self, interaction: discord.Interaction):
+        if not bot.db:
+            await interaction.response.send_message(
+                "Database connection failed!", ephemeral=True
+            )
+            return
+
+        if not interaction.guild:
+            await interaction.response.send_message("Unexpected error!", ephemeral=True)
+            return
+
+        wanted_channel: str = (
+            self.channel.component.value  # pyright: ignore[reportAttributeAccessIssue]
+        )
+
+        message: str = (
+            self.message.component.value  # pyright: ignore[reportAttributeAccessIssue]
+        )
+
+        try:
+            channel = next(
+                channel
+                for channel in interaction.guild.text_channels
+                if channel.name == wanted_channel
+            )
+        except StopIteration:
+            await interaction.response.send_message(
+                f"Couldn't find requested channel `{wanted_channel}`!", ephemeral=True
+            )
+            return
+
+        await bot.db.execute(
+            "INSERT OR REPLACE INTO guildchannel VALUES (?, ?, ?)",
+            (interaction.guild.id, channel.id, message),
+        )
+        await bot.db.commit()
+        await interaction.response.send_message(
+            "Birthday announcements have been configured!", ephemeral=True
+        )
+
+
+@discord.app_commands.allowed_contexts(guilds=True, dms=False, private_channels=True)
+@discord.app_commands.checks.has_permissions(manage_guild=True)
+@bot.tree.command(
+    description="Configure birthday announcements in the server (admin-only)"
+)
+async def config(interaction: discord.Interaction):
+    if not interaction.guild:
+        return
+
+    await interaction.response.send_modal(Configure())
 
 
 token = ""
