@@ -10,6 +10,7 @@ class MyBot(Bot):
     def __init__(self):
         intents = discord.Intents.default()
         intents.message_content = True
+        intents.members = True
         super().__init__(
             command_prefix=";",
             intents=intents,
@@ -30,10 +31,11 @@ class MyBot(Bot):
             );
         """)
         await self.db.execute("""
-            CREATE TABLE IF NOT EXISTS guildchannel (
+            CREATE TABLE IF NOT EXISTS guild (
                 gid INTEGER UNIQUE,
                 cid INTEGER,
-                message TEXT
+                message TEXT,
+                enabled BOOLEAN
             );
         """)
 
@@ -60,7 +62,10 @@ async def test(interaction: Context):
     if not bot.db:
         return
 
-    cursor = await bot.db.execute("SELECT * FROM guildchannel")
+    cursor = await bot.db.execute("SELECT * FROM birthday")
+    await interaction.send(str(await cursor.fetchall()))
+
+    cursor = await bot.db.execute("SELECT * FROM guild")
     await interaction.send(str(await cursor.fetchall()))
 
 
@@ -93,12 +98,21 @@ async def registerme(
             "Unknown timezone!", ephemeral=True
         )
 
+    cursor = await bot.db.execute(
+        "SELECT gids FROM birthday WHERE uid = ?", (interaction.user.id,)
+    )
+    gids_user_row = await cursor.fetchone()
+
+    gids: str = ""
+    if gids_user_row:
+        gids = gids_user_row[0]
+
     await bot.db.execute(
         "INSERT OR REPLACE INTO birthday VALUES (?, ?, ?, ?)",
         (
             interaction.user.id,
             f"{month}-{day}",
-            "",
+            gids,
             timezone,
         ),
     )
@@ -148,11 +162,21 @@ class Configure(ui.Modal, title="Configure"):
             )
             return
 
+        cursor = await bot.db.execute(
+            "SELECT enabled from guild WHERE gid = ?", (interaction.guild.id,)
+        )
+        guild_row = await cursor.fetchone()
+
+        enabled: int = 0
+        if guild_row:
+            enabled = guild_row[0]
+
         await bot.db.execute(
-            "INSERT OR REPLACE INTO guildchannel VALUES (?, ?, ?)",
-            (interaction.guild.id, channel.id, message),
+            "INSERT OR REPLACE INTO guild VALUES (?, ?, ?, ?)",
+            (interaction.guild.id, channel.id, message, enabled),
         )
         await bot.db.commit()
+
         await interaction.response.send_message(
             "Birthday announcements have been configured!", ephemeral=True
         )
@@ -168,6 +192,78 @@ async def config(interaction: discord.Interaction):
         return
 
     await interaction.response.send_modal(Configure())
+
+
+@discord.app_commands.allowed_contexts(guilds=True, dms=False, private_channels=True)
+@discord.app_commands.checks.has_permissions(manage_guild=True)
+@bot.tree.command(
+    description="Enable/disable birthday announcements in the server (admin-only)"
+)
+async def toggle(interaction: discord.Interaction):
+    if not bot.db:
+        return await interaction.response.send_message(
+            "Database connection failed!", ephemeral=True
+        )
+
+    if not interaction.guild:
+        return
+
+    cursor = await bot.db.execute(
+        "SELECT * from guild WHERE gid = ?", (interaction.guild.id,)
+    )
+    guild_row = await cursor.fetchone()
+
+    if not guild_row:
+        return await interaction.response.send_message(
+            "Configure settings with /config first!", ephemeral=True
+        )
+
+    cid: int = guild_row[1]
+    message: str = guild_row[2]
+    enabled: int = guild_row[3]
+
+    for member in interaction.guild.members:
+        cursor = await bot.db.execute(
+            "SELECT * FROM birthday WHERE uid = ?", (member.id,)
+        )
+        gids_user_row = await cursor.fetchone()
+
+        date: str = ""
+        gids_raw: str = ""
+        timezone: str = ""
+        if gids_user_row:
+            date = gids_user_row[1]
+            gids_raw = gids_user_row[2]
+            timezone = gids_user_row[3]
+
+        try:
+            gids: list[int] = [int(gid) for gid in gids_raw.split(",")]
+        except ValueError:
+            gids = []
+
+        if enabled:
+            gids.remove(interaction.guild.id)
+        else:
+            gids.append(interaction.guild.id)
+
+        await bot.db.execute(
+            "INSERT OR REPLACE INTO birthday VALUES (?, ?, ?, ?)",
+            (
+                member.id,
+                date,
+                ",".join([str(gid) for gid in gids]),
+                timezone,
+            ),
+        )
+
+    await bot.db.execute(
+        "INSERT OR REPLACE INTO guild VALUES (?, ?, ?, ?)",
+        (interaction.guild.id, cid, message, not enabled),
+    )
+
+    await bot.db.commit()
+
+    await interaction.response.send_message("Toggled!", ephemeral=True)
 
 
 token = ""
