@@ -69,7 +69,7 @@ async def timezone_autocomplete(
 ) -> list[discord.app_commands.Choice[str]]:
     return [
         discord.app_commands.Choice(name=timezone, value=timezone)
-        for timezone in zoneinfo.available_timezones()
+        for timezone in sorted(zoneinfo.available_timezones())
         if current.lower() in timezone.lower()
     ][:25]
 
