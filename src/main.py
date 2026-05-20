@@ -166,6 +166,11 @@ async def registerme(
             "Database connection failed!", ephemeral=True
         )
 
+    if not bot.scheduler:
+        return await interaction.response.send_message(
+            "AsyncIOScheduler connection failed!", ephemeral=True
+        )
+
     if not timezone in zoneinfo.available_timezones():
         return await interaction.response.send_message(
             "Unknown timezone!", ephemeral=True
@@ -181,13 +186,17 @@ async def registerme(
         return await interaction.response.send_message("Invalid day!", ephemeral=True)
 
     cursor = await bot.db.execute(
-        "SELECT gids FROM birthday WHERE uid = ?", (interaction.user.id,)
+        "SELECT * FROM birthday WHERE uid = ?", (interaction.user.id,)
     )
-    gids_user_row = await cursor.fetchone()
+    user_row = await cursor.fetchone()
 
     gids: str = ""
-    if gids_user_row:
-        gids = gids_user_row[0]
+    if user_row:
+        gids = user_row[2]
+
+        if interaction.user.id in bot.jobs.keys():
+            bot.jobs[interaction.user.id].remove()
+            del bot.jobs[interaction.user.id]
 
     await bot.db.execute(
         "INSERT OR REPLACE INTO birthday VALUES (?, ?, ?, ?)",
@@ -199,6 +208,19 @@ async def registerme(
         ),
     )
     await bot.db.commit()
+
+    if gids:
+        bot.jobs[interaction.user.id] = bot.scheduler.add_job(
+            send_birthday_message,
+            "cron",
+            args=(user_row,),
+            month=month,
+            day=day,
+            hour=0,
+            minute=0,
+            second=1,
+            timezone=timezone,
+        )
 
     await interaction.response.send_message("Birthday registered!", ephemeral=True)
 
