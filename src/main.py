@@ -4,7 +4,7 @@ from discord import ui
 import zoneinfo
 import aiosqlite
 import os
-import apscheduler
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 
 class MyBot(Bot):
@@ -40,12 +40,57 @@ class MyBot(Bot):
             );
         """)
 
-        # cursor = await self.db.execute("SELECT * FROM birthday")
-        # async for row in cursor:
-        #
+        scheduler = AsyncIOScheduler(event_loop=self.loop)
+
+        cursor = await self.db.execute("SELECT * FROM birthday")
+        async for row in cursor:
+            if not row[1] or not row[2]:
+                continue
+
+            month_raw, _, day_raw = row[1].partition("-")
+            month, day = int(month_raw), int(day_raw)
+
+            timezone = row[3]
+
+            scheduler.add_job(
+                send_birthday_message,
+                "cron",
+                args=(row,),
+                month=month,
+                day=day,
+                hour=0,
+                minute=0,
+                timezone=timezone,
+            )
+
+        scheduler.start()
 
 
 bot = MyBot()
+
+
+async def send_birthday_message(row: aiosqlite.Row):
+    if not bot.db:
+        return
+
+    user = bot.get_user(row[0])
+
+    if not user:
+        return
+
+    gids: list[int] = [int(gid) for gid in row[2].split(",")]
+    for gid in gids:
+        cursor = await bot.db.execute("SELECT * FROM guild WHERE gid = ?", (gid,))
+        guild_row = await cursor.fetchone()
+
+        if not guild_row or not guild_row[3]:
+            continue
+
+        channel = bot.get_channel(guild_row[1])
+        if not channel or not isinstance(channel, discord.TextChannel):
+            return
+
+        await channel.send(guild_row[2].replace("${0}", user.mention))
 
 
 @bot.command(description="Sync commands.")
