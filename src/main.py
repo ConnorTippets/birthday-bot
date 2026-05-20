@@ -4,6 +4,7 @@ from discord import ui
 import zoneinfo
 import aiosqlite
 import os
+import apscheduler
 
 
 class MyBot(Bot):
@@ -38,6 +39,10 @@ class MyBot(Bot):
                 enabled BOOLEAN
             );
         """)
+
+        # cursor = await self.db.execute("SELECT * FROM birthday")
+        # async for row in cursor:
+        #
 
 
 bot = MyBot()
@@ -97,6 +102,15 @@ async def registerme(
         return await interaction.response.send_message(
             "Unknown timezone!", ephemeral=True
         )
+
+    if not month in range(1, 13):
+        return await interaction.response.send_message("Invalid month!", ephemeral=True)
+
+    if not day in range(
+        1,
+        29 + (1 if not month == 2 else 0) + (1 if not month in (2, 4, 6, 9, 11) else 0),
+    ):
+        return await interaction.response.send_message("Invalid day!", ephemeral=True)
 
     cursor = await bot.db.execute(
         "SELECT gids FROM birthday WHERE uid = ?", (interaction.user.id,)
