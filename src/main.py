@@ -60,6 +60,7 @@ class MyBot(Bot):
                 day=day,
                 hour=0,
                 minute=0,
+                second=1,
                 timezone=timezone,
             )
 
