@@ -6,6 +6,26 @@ import aiosqlite
 import os
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
+DAY_SUFFIXES = (
+    ["st", "nd", "rd"]
+    + (
+        [
+            "th",
+        ]
+        * 17
+    )
+    + ["st", "nd", "rd"]
+    + (
+        [
+            "th",
+        ]
+        * 17
+    )
+    + [
+        "st",
+    ]
+)
+
 
 class MyBot(Bot):
     def __init__(self):
@@ -18,6 +38,8 @@ class MyBot(Bot):
         )
 
         self.db = None
+        self.scheduler = None
+        self.jobs = {}
 
     async def setup_hook(self):
         print(await bot.tree.sync())
@@ -40,7 +62,7 @@ class MyBot(Bot):
             );
         """)
 
-        scheduler = AsyncIOScheduler(event_loop=self.loop)
+        self.scheduler = AsyncIOScheduler(event_loop=self.loop)
 
         cursor = await self.db.execute("SELECT * FROM birthday")
         async for row in cursor:
@@ -52,7 +74,7 @@ class MyBot(Bot):
 
             timezone = row[3]
 
-            scheduler.add_job(
+            self.jobs[row[0]] = self.scheduler.add_job(
                 send_birthday_message,
                 "cron",
                 args=(row,),
@@ -64,7 +86,7 @@ class MyBot(Bot):
                 timezone=timezone,
             )
 
-        scheduler.start()
+        self.scheduler.start()
 
 
 bot = MyBot()
@@ -324,6 +346,68 @@ async def toggle(interaction: discord.Interaction):
     await bot.db.commit()
 
     await interaction.response.send_message("Toggled!", ephemeral=True)
+
+
+def humanize_date(date: str) -> str:
+    month_raw, _, day_raw = date.partition("-")
+    month, day = int(month_raw), int(day_raw)
+
+    month_human = [
+        "January",
+        "Feburary",
+        "March",
+        "April",
+        "May",
+        "June",
+        "July",
+        "August",
+        "September",
+        "October",
+        "November",
+        "December",
+    ][month - 1]
+    day_human = str(day) + DAY_SUFFIXES[day - 1]
+
+    return f"{day_human} of {month_human}"
+
+
+@discord.app_commands.allowed_contexts(guilds=True, dms=False, private_channels=True)
+@bot.tree.command(description="Lists registered birthdays in your server")
+async def birthdays(interaction: discord.Interaction):
+    if not bot.db:
+        return await interaction.response.send_message(
+            "Database connection failed!", ephemeral=True
+        )
+
+    if not interaction.guild:
+        return
+
+    mtbd: dict[str, str] = {}
+    for member in interaction.guild.members:
+        cursor = await bot.db.execute(
+            "SELECT * from birthday WHERE uid = ?", (member.id,)
+        )
+        birthday_row = await cursor.fetchone()
+
+        if not birthday_row or not birthday_row[1]:
+            continue
+
+        mtbd[member.name] = humanize_date(birthday_row[1])
+
+    embed = discord.Embed()
+    embed.color = discord.Color.from_rgb(70, 200, 230)
+    embed.set_author(name=f"{interaction.guild.name} birthdays")
+
+    if interaction.guild.icon:
+        embed.set_thumbnail(url=interaction.guild.icon.url)
+
+    for member, date in mtbd.items():
+        if embed.description:
+            embed.description = embed.description + f"\n**{member}**: {date}"
+        else:
+            embed.description = f"\n**{member}**: {date}"
+
+    await interaction.response.send_message(embed=embed)
 
 
 token = ""
