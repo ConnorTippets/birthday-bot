@@ -140,7 +140,11 @@ async def send_birthday_message(row: aiosqlite.Row):
         embed.color = discord.Color.from_rgb(70, 200, 230)
         embed.set_author(name=f"It's a special day!")
 
-        icon_url: str = guild_row[3] or (guild.icon.url if guild.icon else "")
+        icon_url: str = (
+            guild_row[3]
+            or (bot.user.avatar.url if bot.user and bot.user.avatar else None)
+            or (guild.icon.url if guild.icon else "")
+        )
         embed.set_thumbnail(url=icon_url)
 
         embed.description = guild_row[2].replace("${0}", user.mention)
@@ -487,8 +491,10 @@ async def birthdays(interaction: discord.Interaction):
     embed.color = discord.Color.from_rgb(70, 200, 230)
     embed.set_author(name=f"{interaction.guild.name} birthdays")
 
-    icon_url: str = icon_row[0] or (
-        interaction.guild.icon.url if interaction.guild.icon else ""
+    icon_url: str = (
+        icon_row[0]
+        or (interaction.guild.icon.url if interaction.guild.icon else None)
+        or (bot.user.avatar.url if bot.user and bot.user.avatar else "")
     )
     embed.set_thumbnail(url=icon_url)
 
