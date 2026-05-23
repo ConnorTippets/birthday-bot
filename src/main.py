@@ -182,8 +182,9 @@ async def timezone_autocomplete(
 
 @discord.app_commands.allowed_contexts(guilds=True, dms=True, private_channels=True)
 @discord.app_commands.autocomplete(
-    month=month_autocomplete, timezone=timezone_autocomplete
+    raw_month=month_autocomplete, timezone=timezone_autocomplete
 )
+@discord.app_commands.rename(raw_month="month")
 @bot.tree.command(description="Register your birthday with the bot!")
 async def registerme(
     interaction: discord.Interaction,
