@@ -104,6 +104,8 @@ class MyBot(Bot):
 
         self.scheduler.start()
 
+        await self.load_extension("jishaku")
+
 
 bot = MyBot()
 
