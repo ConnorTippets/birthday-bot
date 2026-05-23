@@ -26,6 +26,21 @@ DAY_SUFFIXES = (
     ]
 )
 
+MONTHS = [
+    "January",
+    "Feburary",
+    "March",
+    "April",
+    "May",
+    "June",
+    "July",
+    "August",
+    "September",
+    "October",
+    "November",
+    "December",
+]
+
 
 class MyBot(Bot):
     def __init__(self):
@@ -135,11 +150,24 @@ async def test(interaction: Context):
     if not bot.db:
         return
 
-    cursor = await bot.db.execute("SELECT * FROM birthday")
-    await interaction.send(str(await cursor.fetchall()))
+    await interaction.send(
+        str(
+            {
+                key: (job.trigger.fields, job.trigger.timezone)
+                for key, job in bot.jobs.items()
+            }
+        )
+    )
 
-    cursor = await bot.db.execute("SELECT * FROM guild")
-    await interaction.send(str(await cursor.fetchall()))
+
+async def month_autocomplete(
+    interaction: discord.Interaction, current: str
+) -> list[discord.app_commands.Choice[str]]:
+    return [
+        discord.app_commands.Choice(name=month, value=month)
+        for month in MONTHS
+        if current.lower() in month.lower()
+    ]
 
 
 async def timezone_autocomplete(
@@ -153,11 +181,13 @@ async def timezone_autocomplete(
 
 
 @discord.app_commands.allowed_contexts(guilds=True, dms=True, private_channels=True)
-@discord.app_commands.autocomplete(timezone=timezone_autocomplete)
+@discord.app_commands.autocomplete(
+    month=month_autocomplete, timezone=timezone_autocomplete
+)
 @bot.tree.command(description="Register your birthday with the bot!")
 async def registerme(
     interaction: discord.Interaction,
-    month: int,
+    raw_month: str | int,
     day: int,
     timezone: str,
 ):
@@ -175,6 +205,12 @@ async def registerme(
         return await interaction.response.send_message(
             "Unknown timezone!", ephemeral=True
         )
+
+    month: int = -1
+    if isinstance(raw_month, str):
+        month = MONTHS.index(raw_month.capitalize()) + 1
+    else:
+        month = raw_month
 
     if not month in range(1, 13):
         return await interaction.response.send_message("Invalid month!", ephemeral=True)
@@ -374,20 +410,7 @@ def humanize_date(date: str) -> str:
     month_raw, _, day_raw = date.partition("-")
     month, day = int(month_raw), int(day_raw)
 
-    month_human = [
-        "January",
-        "Feburary",
-        "March",
-        "April",
-        "May",
-        "June",
-        "July",
-        "August",
-        "September",
-        "October",
-        "November",
-        "December",
-    ][month - 1]
+    month_human = MONTHS[month - 1]
     day_human = str(day) + DAY_SUFFIXES[day - 1]
 
     return f"{day_human} of {month_human}"
