@@ -74,6 +74,7 @@ class MyBot(Bot):
                 gid INTEGER UNIQUE,
                 cid INTEGER,
                 message TEXT,
+                icon TEXT,
                 enabled BOOLEAN
             );
         """)
@@ -124,14 +125,27 @@ async def send_birthday_message(row: aiosqlite.Row):
         cursor = await bot.db.execute("SELECT * FROM guild WHERE gid = ?", (gid,))
         guild_row = await cursor.fetchone()
 
-        if not guild_row or not guild_row[3]:
+        if not guild_row or not guild_row[4]:
             continue
 
         channel = bot.get_channel(guild_row[1])
         if not channel or not isinstance(channel, discord.TextChannel):
             return
 
-        await channel.send(guild_row[2].replace("${0}", user.mention))
+        guild = bot.get_guild(gid)
+        if not guild:
+            return
+
+        embed = discord.Embed()
+        embed.color = discord.Color.from_rgb(70, 200, 230)
+        embed.set_author(name=f"It's a special day!")
+
+        icon_url: str = guild_row[3] or (guild.icon.url if guild.icon else "")
+        embed.set_thumbnail(url=icon_url)
+
+        embed.description = guild_row[2].replace("${0}", user.mention)
+
+        await channel.send(embed=embed)
 
 
 @bot.command(description="Sync commands.")
@@ -271,8 +285,12 @@ class Configure(ui.Modal, title="Configure"):
         component=ui.TextInput(required=True),
     )
     message = ui.Label(
-        text=r"The birthday announcement itself!",
+        text="The birthday announcement itself!",
         component=ui.TextInput(required=True, placeholder="Today is ${0}!'s birthday!"),
+    )
+    icon = ui.Label(
+        text="Image to use in birthday announcement embeds (optional)",
+        component=ui.FileUpload(required=False),
     )
 
     async def on_submit(self, interaction: discord.Interaction):
@@ -294,6 +312,16 @@ class Configure(ui.Modal, title="Configure"):
             self.message.component.value  # pyright: ignore[reportAttributeAccessIssue]
         )
 
+        icon: str = ""
+        try:
+            icon: str = (
+                self.icon.component.values[  # pyright: ignore[reportAttributeAccessIssue]
+                    0
+                ].url
+            )
+        except IndexError:
+            pass
+
         try:
             channel = next(
                 channel
@@ -311,13 +339,13 @@ class Configure(ui.Modal, title="Configure"):
         )
         guild_row = await cursor.fetchone()
 
-        enabled: int = 0
+        enabled: int = 1
         if guild_row:
             enabled = guild_row[0]
 
         await bot.db.execute(
-            "INSERT OR REPLACE INTO guild VALUES (?, ?, ?, ?)",
-            (interaction.guild.id, channel.id, message, enabled),
+            "INSERT OR REPLACE INTO guild VALUES (?, ?, ?, ?, ?)",
+            (interaction.guild.id, channel.id, message, icon, enabled),
         )
         await bot.db.commit()
 
@@ -364,7 +392,8 @@ async def toggle(interaction: discord.Interaction):
 
     cid: int = guild_row[1]
     message: str = guild_row[2]
-    enabled: int = guild_row[3]
+    icon: str = guild_row[3]
+    enabled: int = guild_row[4]
 
     for member in interaction.guild.members:
         cursor = await bot.db.execute(
@@ -401,8 +430,8 @@ async def toggle(interaction: discord.Interaction):
         )
 
     await bot.db.execute(
-        "INSERT OR REPLACE INTO guild VALUES (?, ?, ?, ?)",
-        (interaction.guild.id, cid, message, not enabled),
+        "INSERT OR REPLACE INTO guild VALUES (?, ?, ?, ?, ?)",
+        (interaction.guild.id, cid, message, icon, not enabled),
     )
 
     await bot.db.commit()
@@ -431,6 +460,17 @@ async def birthdays(interaction: discord.Interaction):
     if not interaction.guild:
         return
 
+    cursor = await bot.db.execute(
+        "SELECT icon from guild WHERE gid = ?", (interaction.guild.id,)
+    )
+    icon_row = await cursor.fetchone()
+
+    if not icon_row:
+        return await interaction.response.send_message(
+            "Birthday announcements have not been configured for this server!",
+            ephemeral=True,
+        )
+
     mtbd: dict[str, str] = {}
     for member in interaction.guild.members:
         cursor = await bot.db.execute(
@@ -447,8 +487,10 @@ async def birthdays(interaction: discord.Interaction):
     embed.color = discord.Color.from_rgb(70, 200, 230)
     embed.set_author(name=f"{interaction.guild.name} birthdays")
 
-    if interaction.guild.icon:
-        embed.set_thumbnail(url=interaction.guild.icon.url)
+    icon_url: str = icon_row[0] or (
+        interaction.guild.icon.url if interaction.guild.icon else ""
+    )
+    embed.set_thumbnail(url=icon_url)
 
     for member, date in mtbd.items():
         if embed.description:
