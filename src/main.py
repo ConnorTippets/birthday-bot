@@ -55,6 +55,7 @@ class MyBot(Bot):
         self.db = None
         self.scheduler = None
         self.jobs = {}
+        self.allowed_mentions = discord.AllowedMentions.all()
 
     async def setup_hook(self):
         print(await bot.tree.sync())
