@@ -289,7 +289,7 @@ class Configure(ui.Modal, title="Configure"):
         component=ui.TextInput(required=True, placeholder="Today is ${0}!'s birthday!"),
     )
     icon = ui.Label(
-        text="Image to use in birthday announcement embeds (optional)",
+        text="Image in birthday related embeds (optional)",
         component=ui.FileUpload(required=False),
     )
 
