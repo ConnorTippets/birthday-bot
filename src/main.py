@@ -492,8 +492,8 @@ async def birthdays(interaction: discord.Interaction):
     embed.set_author(name=f"{interaction.guild.name} birthdays")
 
     icon_url: str = (
-        icon_row[0]
-        or (interaction.guild.icon.url if interaction.guild.icon else None)
+        (interaction.guild.icon.url if interaction.guild.icon else None)
+        or icon_row[0]
         or (bot.user.avatar.url if bot.user and bot.user.avatar else "")
     )
     embed.set_thumbnail(url=icon_url)
