@@ -187,7 +187,7 @@ async def timezone_autocomplete(
 @bot.tree.command(description="Register your birthday with the bot!")
 async def registerme(
     interaction: discord.Interaction,
-    raw_month: str | int,
+    raw_month: str,
     day: int,
     timezone: str,
 ):
@@ -207,10 +207,10 @@ async def registerme(
         )
 
     month: int = -1
-    if isinstance(raw_month, str):
+    try:
+        month = int(raw_month)
+    except ValueError:
         month = MONTHS.index(raw_month.capitalize()) + 1
-    else:
-        month = raw_month
 
     if not month in range(1, 13):
         return await interaction.response.send_message("Invalid month!", ephemeral=True)
