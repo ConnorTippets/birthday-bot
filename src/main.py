@@ -450,7 +450,7 @@ def humanize_date(date: str) -> str:
     month_human = MONTHS[month - 1]
     day_human = str(day) + DAY_SUFFIXES[day - 1]
 
-    return f"{day_human} of {month_human}"
+    return f"{month_human} {day_human}"
 
 
 @discord.app_commands.allowed_contexts(guilds=True, dms=False, private_channels=True)
