@@ -476,7 +476,7 @@ async def birthdays(interaction: discord.Interaction):
         )
 
     mtbd: dict[str, str] = {}
-    for member in interaction.guild.members:
+    for member in sorted(interaction.guild.members, key=lambda x: x.display_name):
         cursor = await bot.db.execute(
             "SELECT * from birthday WHERE uid = ?", (member.id,)
         )
@@ -485,7 +485,7 @@ async def birthdays(interaction: discord.Interaction):
         if not birthday_row or not birthday_row[1]:
             continue
 
-        mtbd[member.name] = humanize_date(birthday_row[1])
+        mtbd[member.mention] = humanize_date(birthday_row[1])
 
     embed = discord.Embed()
     embed.color = discord.Color.from_rgb(70, 200, 230)
