@@ -28,7 +28,7 @@ DAY_SUFFIXES = (
 
 MONTHS = [
     "January",
-    "Feburary",
+    "February",
     "March",
     "April",
     "May",
@@ -94,7 +94,7 @@ class MyBot(Bot):
             self.jobs[row[0]] = self.scheduler.add_job(
                 send_birthday_message,
                 "cron",
-                args=(row,),
+                args=(int(row[0]),),
                 month=month,
                 day=day,
                 hour=0,
@@ -111,11 +111,15 @@ class MyBot(Bot):
 bot = MyBot()
 
 
-async def send_birthday_message(row: aiosqlite.Row):
+async def send_birthday_message(uid: int):
     if not bot.db:
         return
 
-    user = bot.get_user(row[0])
+    user = bot.get_user(uid)
+    cursor = await bot.db.execute("SELECT * FROM birthday WHERE uid = ?", (uid,))
+    row = await cursor.fetchone()
+    if not row:
+        return
 
     if not user:
         return
@@ -271,7 +275,7 @@ async def registerme(
         bot.jobs[interaction.user.id] = bot.scheduler.add_job(
             send_birthday_message,
             "cron",
-            args=(user_row,),
+            args=(interaction.user.id,),
             month=month,
             day=day,
             hour=0,
