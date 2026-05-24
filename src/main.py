@@ -508,7 +508,7 @@ async def birthdays(interaction: discord.Interaction, sort: str = "alphabeticall
 
     members = interaction.guild.members
     if sort == "alphabetically":
-        members = sorted(members, key=lambda x: x.display_name)
+        members = sorted(members, key=lambda x: x.display_name.lower())
 
     mtbd: dict[str, str] = {}
     for member in members:
