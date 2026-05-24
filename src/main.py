@@ -453,6 +453,14 @@ def humanize_date(date: str) -> str:
     return f"{month_human} {day_human}"
 
 
+def date_sorting_key(mtbd_item: tuple[str, str]) -> int:
+    _, birthday = mtbd_item
+    month_raw, _, day_raw = birthday.partition("-")
+    month, day = int(month_raw), int(day_raw)
+
+    return month * 100 + day
+
+
 @discord.app_commands.allowed_contexts(guilds=True, dms=False, private_channels=True)
 @bot.tree.command(description="Lists registered birthdays in your server")
 async def birthdays(interaction: discord.Interaction):
@@ -476,9 +484,7 @@ async def birthdays(interaction: discord.Interaction):
         )
 
     mtbd: dict[str, str] = {}
-    for member in sorted(
-        interaction.guild.members, key=lambda x: x.display_name.lower()
-    ):
+    for member in interaction.guild.members:
         cursor = await bot.db.execute(
             "SELECT * from birthday WHERE uid = ?", (member.id,)
         )
@@ -487,7 +493,7 @@ async def birthdays(interaction: discord.Interaction):
         if not birthday_row or not birthday_row[1]:
             continue
 
-        mtbd[member.mention] = humanize_date(birthday_row[1])
+        mtbd[member.mention] = birthday_row[1]
 
     embed = discord.Embed()
     embed.color = discord.Color.from_rgb(70, 200, 230)
@@ -500,7 +506,9 @@ async def birthdays(interaction: discord.Interaction):
     )
     embed.set_thumbnail(url=icon_url)
 
-    for member, date in mtbd.items():
+    mtbd_iter = sorted(mtbd.items(), key=date_sorting_key)
+
+    for member, date in mtbd_iter:
         if embed.description:
             embed.description = embed.description + f"\n**{member}**: {date}"
         else:
