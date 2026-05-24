@@ -476,7 +476,9 @@ async def birthdays(interaction: discord.Interaction):
         )
 
     mtbd: dict[str, str] = {}
-    for member in sorted(interaction.guild.members, key=lambda x: x.display_name):
+    for member in sorted(
+        interaction.guild.members, key=lambda x: x.display_name.lower()
+    ):
         cursor = await bot.db.execute(
             "SELECT * from birthday WHERE uid = ?", (member.id,)
         )
