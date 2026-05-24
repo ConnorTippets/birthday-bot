@@ -461,9 +461,26 @@ def date_sorting_key(mtbd_item: tuple[str, str]) -> int:
     return month * 100 + day
 
 
+async def sort_autocomplete(
+    interaction: discord.Interaction, current: str
+) -> list[discord.app_commands.Choice[str]]:
+    choices = []
+    if current.lower() in "alphabetically":
+        choices.append(
+            discord.app_commands.Choice(name="alphabetically", value="alphabetically")
+        )
+    if current.lower() in "by birthday":
+        choices.append(
+            discord.app_commands.Choice(name="by birthday", value="by birthday")
+        )
+
+    return choices
+
+
 @discord.app_commands.allowed_contexts(guilds=True, dms=False, private_channels=True)
+@discord.app_commands.autocomplete(sort=sort_autocomplete)
 @bot.tree.command(description="Lists registered birthdays in your server")
-async def birthdays(interaction: discord.Interaction):
+async def birthdays(interaction: discord.Interaction, sort: str = "alphabetically"):
     if not bot.db:
         return await interaction.response.send_message(
             "Database connection failed!", ephemeral=True
@@ -471,6 +488,12 @@ async def birthdays(interaction: discord.Interaction):
 
     if not interaction.guild:
         return
+
+    if not sort in ("alphabetically", "by birthday"):
+        return await interaction.response.send_message(
+            "Invalid sorting option!",
+            ephemeral=True,
+        )
 
     cursor = await bot.db.execute(
         "SELECT icon from guild WHERE gid = ?", (interaction.guild.id,)
@@ -483,8 +506,12 @@ async def birthdays(interaction: discord.Interaction):
             ephemeral=True,
         )
 
+    members = interaction.guild.members
+    if sort == "alphabetically":
+        members = sorted(members, key=lambda x: x.display_name)
+
     mtbd: dict[str, str] = {}
-    for member in interaction.guild.members:
+    for member in members:
         cursor = await bot.db.execute(
             "SELECT * from birthday WHERE uid = ?", (member.id,)
         )
@@ -506,9 +533,12 @@ async def birthdays(interaction: discord.Interaction):
     )
     embed.set_thumbnail(url=icon_url)
 
-    mtbd_iter = sorted(mtbd.items(), key=date_sorting_key)
+    mtbd_iter = mtbd.items()
+    if sort == "by birthday":
+        mtbd_iter = sorted(mtbd_iter, key=date_sorting_key)
 
-    for member, date in mtbd_iter:
+    for member, date_raw in mtbd_iter:
+        date = humanize_date(date_raw)
         if embed.description:
             embed.description = embed.description + f"\n**{member}**: {date}"
         else:
