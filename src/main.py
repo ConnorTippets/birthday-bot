@@ -287,6 +287,90 @@ async def registerme(
     await interaction.response.send_message("Birthday registered!", ephemeral=True)
 
 
+@discord.app_commands.allowed_contexts(guilds=True, dms=False, private_channels=True)
+@discord.app_commands.autocomplete(
+    raw_month=month_autocomplete, timezone=timezone_autocomplete
+)
+@discord.app_commands.checks.has_permissions(manage_guild=True)
+@discord.app_commands.rename(raw_month="month")
+@bot.tree.command(
+    description="Register someone else's birthday with the bot! (admin-only)"
+)
+async def registerother(
+    interaction: discord.Interaction,
+    user: discord.Member,
+    raw_month: str,
+    day: int,
+    timezone: str,
+):
+    if not bot.db:
+        return await interaction.response.send_message(
+            "Database connection failed!", ephemeral=True
+        )
+
+    if not bot.scheduler:
+        return await interaction.response.send_message(
+            "AsyncIOScheduler connection failed!", ephemeral=True
+        )
+
+    if not timezone in zoneinfo.available_timezones():
+        return await interaction.response.send_message(
+            "Unknown timezone!", ephemeral=True
+        )
+
+    month: int = -1
+    try:
+        month = int(raw_month)
+    except ValueError:
+        month = MONTHS.index(raw_month.capitalize()) + 1
+
+    if not month in range(1, 13):
+        return await interaction.response.send_message("Invalid month!", ephemeral=True)
+
+    if not day in range(
+        1,
+        29 + (1 if not month == 2 else 0) + (1 if not month in (2, 4, 6, 9, 11) else 0),
+    ):
+        return await interaction.response.send_message("Invalid day!", ephemeral=True)
+
+    cursor = await bot.db.execute("SELECT * FROM birthday WHERE uid = ?", (user.id,))
+    user_row = await cursor.fetchone()
+
+    gids: str = ""
+    if user_row:
+        gids = user_row[2]
+
+        if user.id in bot.jobs.keys():
+            bot.jobs[user.id].remove()
+            del bot.jobs[user.id]
+
+    await bot.db.execute(
+        "INSERT OR REPLACE INTO birthday VALUES (?, ?, ?, ?)",
+        (
+            user.id,
+            f"{month}-{day}",
+            gids,
+            timezone,
+        ),
+    )
+    await bot.db.commit()
+
+    if gids:
+        bot.jobs[user.id] = bot.scheduler.add_job(
+            send_birthday_message,
+            "cron",
+            args=(user.id,),
+            month=month,
+            day=day,
+            hour=0,
+            minute=0,
+            second=1,
+            timezone=timezone,
+        )
+
+    await interaction.response.send_message("Birthday registered!", ephemeral=True)
+
+
 class Configure(ui.Modal, title="Configure"):
     channel = ui.Label(
         text="Channel to send birthday announcements",
