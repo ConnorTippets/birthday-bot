@@ -243,7 +243,7 @@ async def registerme(
 
     if not day in range(
         1,
-        32 if month in [1, 3, 5, 7, 8, 10, 12] else (29 if month == 2 else 31),
+        32 if month in [1, 3, 5, 7, 8, 10, 12] else (30 if month == 2 else 31),
     ):
         return await interaction.response.send_message("Invalid day!", ephemeral=True)
 
@@ -329,7 +329,7 @@ async def registerother(
 
     if not day in range(
         1,
-        32 if month in [1, 3, 5, 7, 8, 10, 12] else (29 if month == 2 else 31),
+        32 if month in [1, 3, 5, 7, 8, 10, 12] else (30 if month == 2 else 31),
     ):
         return await interaction.response.send_message("Invalid day!", ephemeral=True)
 
