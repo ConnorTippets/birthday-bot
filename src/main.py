@@ -4,6 +4,7 @@ from discord import ui
 import zoneinfo
 import aiosqlite
 import os
+import datetime
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 DAY_SUFFIXES = (
@@ -56,6 +57,24 @@ class MyBot(Bot):
         self.scheduler = None
         self.jobs = {}
         self.allowed_mentions = discord.AllowedMentions.all()
+    
+    def schedule_job(self, uid: int, month: int, day: int, timezone: str):
+        if not self.scheduler:
+            return
+        
+        their_timezone = datetime.datetime(2026, month, day, 0, 0, 0, tzinfo=zoneinfo.ZoneInfo(timezone))
+        my_timezone = their_timezone.astimezone()
+
+        self.jobs[uid] = self.scheduler.add_job(
+            send_birthday_message,
+            "cron",
+            args=(uid,),
+            month=my_timezone.month,
+            day=my_timezone.day,
+            hour=my_timezone.hour,
+            minute=my_timezone.minute,
+            second=my_timezone.second + 1,
+        )
 
     async def setup_hook(self):
         print(await bot.tree.sync())
@@ -90,18 +109,8 @@ class MyBot(Bot):
             month, day = int(month_raw), int(day_raw)
 
             timezone = row[3]
-
-            self.jobs[row[0]] = self.scheduler.add_job(
-                send_birthday_message,
-                "cron",
-                args=(int(row[0]),),
-                month=month,
-                day=day,
-                hour=0,
-                minute=0,
-                second=1,
-                timezone=timezone,
-            )
+            
+            self.schedule_job(int(row[0]), month, day, timezone)
 
         self.scheduler.start()
 
@@ -272,17 +281,7 @@ async def registerme(
     await bot.db.commit()
 
     if gids:
-        bot.jobs[interaction.user.id] = bot.scheduler.add_job(
-            send_birthday_message,
-            "cron",
-            args=(interaction.user.id,),
-            month=month,
-            day=day,
-            hour=0,
-            minute=0,
-            second=1,
-            timezone=timezone,
-        )
+        bot.schedule_job(interaction.user.id, month, day, timezone)
 
     await interaction.response.send_message("Birthday registered!", ephemeral=True)
 
