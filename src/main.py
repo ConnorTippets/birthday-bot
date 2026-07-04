@@ -552,13 +552,13 @@ async def sort_autocomplete(
     interaction: discord.Interaction, current: str
 ) -> list[discord.app_commands.Choice[str]]:
     choices = []
-    if current.lower() in "alphabetically":
-        choices.append(
-            discord.app_commands.Choice(name="alphabetically", value="alphabetically")
-        )
     if current.lower() in "by birthday":
         choices.append(
             discord.app_commands.Choice(name="by birthday", value="by birthday")
+        )
+    if current.lower() in "alphabetically":
+        choices.append(
+            discord.app_commands.Choice(name="alphabetically", value="alphabetically")
         )
 
     return choices
@@ -567,7 +567,7 @@ async def sort_autocomplete(
 @discord.app_commands.allowed_contexts(guilds=True, dms=False, private_channels=True)
 @discord.app_commands.autocomplete(sort=sort_autocomplete)
 @bot.tree.command(description="Lists registered birthdays in your server")
-async def birthdays(interaction: discord.Interaction, sort: str = "alphabetically"):
+async def birthdays(interaction: discord.Interaction, sort: str = "by birthday"):
     if not bot.db:
         return await interaction.response.send_message(
             "Database connection failed!", ephemeral=True
