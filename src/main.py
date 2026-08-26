@@ -143,11 +143,11 @@ async def send_birthday_message(uid: int):
 
         channel = bot.get_channel(guild_row[1])
         if not channel or not isinstance(channel, discord.TextChannel):
-            return
+            continue
 
         guild = bot.get_guild(gid)
         if not guild:
-            return
+            continue
 
         embed = discord.Embed()
         embed.color = discord.Color.from_rgb(70, 200, 230)
@@ -159,7 +159,6 @@ async def send_birthday_message(uid: int):
             or (guild.icon.url if guild.icon else "")
         )
         embed.set_thumbnail(url=icon_url)
-
         embed.description = guild_row[2].replace("${0}", user.mention)
 
         await channel.send(embed=embed)
