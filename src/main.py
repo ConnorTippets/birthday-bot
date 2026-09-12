@@ -57,12 +57,14 @@ class MyBot(Bot):
         self.scheduler = None
         self.jobs = {}
         self.allowed_mentions = discord.AllowedMentions.all()
-    
+
     def schedule_job(self, uid: int, month: int, day: int, timezone: str):
         if not self.scheduler:
             return
-        
-        their_timezone = datetime.datetime(2026, month, day, 0, 0, 0, tzinfo=zoneinfo.ZoneInfo(timezone))
+
+        their_timezone = datetime.datetime(
+            2026, month, day, 0, 0, 0, tzinfo=zoneinfo.ZoneInfo(timezone)
+        )
         my_timezone = their_timezone.astimezone()
 
         self.jobs[uid] = self.scheduler.add_job(
@@ -74,6 +76,7 @@ class MyBot(Bot):
             hour=my_timezone.hour,
             minute=my_timezone.minute,
             second=my_timezone.second + 1,
+            misfire_grace_time=None,  # by default, the job can only be late by 1 second before it's rejected. i doubt it will be off by more than a couple seconds, so disabling this should be fine
         )
 
     async def setup_hook(self):
@@ -109,7 +112,7 @@ class MyBot(Bot):
             month, day = int(month_raw), int(day_raw)
 
             timezone = row[3]
-            
+
             self.schedule_job(int(row[0]), month, day, timezone)
 
         self.scheduler.start()
